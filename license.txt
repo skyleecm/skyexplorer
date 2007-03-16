@@ -1,0 +1,8 @@
+ GNU GENERAL PUBLIC LICENSE
+ Version 2, June 1991
+
+ Copyright (C) 1989, 1991 Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ Please refer to http://www.gnu.org/licenses/gpl.html for the details.
+
+ This software Sky Explorer is licensed for use under GNU GENERAL PUBLIC LICENSE.
+ I have read and accept the GNU GPL license agreement.
