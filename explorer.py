@@ -38,6 +38,12 @@ from dir_util import copy_tree, remove_tree, copy_file, findFiles, zip_tree, unz
 # send to PC win2000 BlueSoleil 1.6.1.4
 #   it works only after I use OBEX Commander to connect with phone first
 #----------------------------------------------------------------------
+# 1.0.1 changes
+# add Explorer.findApps1 (require applist.pyd - allow S60 3rd Edition)
+# add AppItem._pname (same as old AppItem.name - the app filename without ext)
+#   the AppItem.name is initialize with app caption (from findApps1)
+# fix checklayout
+#----------------------------------------------------------------------
 
 TypeANY = 0
 TypeDRIVE = 2
@@ -51,7 +57,7 @@ SCREENSHOT = 5
 
 IconFile = u"explorer.mbm"
 AppTitle = u"File Explorer"
-AboutApp = u"Sky eXplorer v1.0 by\nskyleecm@gmail.com\nFor user guide, go to\nhttp://timelesssky.com\nat url\n/blog/sky-explorer"
+AboutApp = u"Sky eXplorer v1.0.1 by\nskyleecm@gmail.com\nFor user guide, go to\nhttp://timelesssky.com\nat url\n/blog/sky-explorer"
 DefaultName = u"My Phone"
 ATxtNew = u"[New]"
 
@@ -65,6 +71,7 @@ ListAttrMaxWidth = 8
 AppRun  = "Z:\\system\\programs\\apprun.exe"
 AppsDir = "\\system\\Apps"
 AppExt = ".app"
+ExeExt = ".exe"
 AppMgr = "AppMngr"
 # midlets
 MidpDir = "\\system\\MIDlets"
@@ -93,6 +100,7 @@ class AppItem(object):
     def __init__(self, namepath, getEntry):
         self.name, self.p, self.tags = namepath[0], namepath[1], None
         self._appitem = [getEntry(self), getEntry(self, 1)]
+        self._pname = path.split(path.splitext(namepath[1])[0])[1].lower()
     def getAppitem(self, iCheck=0): return self._appitem[iCheck]
 
 class AppInterface(object):
@@ -124,7 +132,7 @@ class App(AppInterface):
         self.name = u"Apps"
         self.exp = exp
         getListboxEntry = self.getListboxEntry
-        self.apps = [AppItem(app, getListboxEntry) for app in exp.findApps()]
+        self.apps = [AppItem(app, getListboxEntry) for app in exp.findApps1()]
         icon = exp.icons[TypeFOLDER]
         self._appitem = exp.listStyle and (self.name, Es, icon) or (self.name, icon)
         self._appmenu = None
@@ -208,6 +216,8 @@ class App(AppInterface):
             ext = path.splitext(item.p)[1].lower()
             if ext == AppExt:
                 e32.start_exe(AppRun, item.p)
+            elif ext == ExeExt:
+                e32.start_exe(item.p, '')
             elif ext == MidpExt:
                 alert("The program does not know how to run %s" % item.name)
                 #e32.start_exe(AppRun, item.p)
@@ -246,8 +256,8 @@ class App(AppInterface):
         m = {}
         for a in self.apps:
             aset[a.p[0:2]].add(a)
-            m[a.name] = a
-            if a.name.lower() == appmgr:
+            m[a._pname] = a #m[a.name] = a
+            if a._pname == appmgr:
                 mgr = a
         for d in aset.keys():
             if not aset[d]:
@@ -262,6 +272,7 @@ class App(AppInterface):
             if not p.startswith(name):
                 continue
             names = self._tags(p)
+            names[0] = names[0].lower()
             if len(names) > 1 or names[0] not in m:
                 continue
             a = m[names[0]]
@@ -278,7 +289,7 @@ class App(AppInterface):
         m = dict([(aname, []) for aname in self._mapapps.iterkeys()])
         for tag, tset in aset.iteritems():
             for a in tset:
-                m[a.name].append(tag)
+                m[a._pname].append(tag) #m[a.name].append(tag)
         return m
                  
     def _readTags(self):
@@ -304,7 +315,10 @@ class App(AppInterface):
 
     def _uninstall(self, item):
         try:    # only run manager
-            e32.start_exe(AppRun, self._mgr.p) #item.p
+            if e32.s60_version_info >= (3,0):
+                e32.start_exe(self._mgr.p, '')
+            else:
+                e32.start_exe(AppRun, self._mgr.p) #item.p
         except Exception, e:
             alert(e)
         
@@ -471,6 +485,17 @@ class Explorer(object):
                 files = filter([unicode(name) for name in os.listdir(p)], jext)
                 if files and len(files) == 1:
                     apps.append((files[0], path.join(p, files[0])))
+        apps.sort()
+        return apps
+
+    def findApps1(self):
+        try:
+            import applist
+        except Exception, e:
+            alert(e)
+            return self.findApps()
+        apps = [(ai[1].strip() and ai[1] or path.split(path.splitext(ai[2])[0])[1], ai[2])
+            for ai in applist.applist()]
         apps.sort()
         return apps
     
@@ -767,6 +792,8 @@ class Explorer(object):
         try:
             if ext == AppExt[1:]:
                 e32.start_exe(AppRun, fname)
+            elif ext == ExeExt[1:]:
+                e32.start_exe(fname, '')
             else:
                 appuifw.Content_handler().open_standalone(fname)
         except Exception, e:
@@ -1677,11 +1704,13 @@ def checklayout():
     if not hasattr(appuifw, 'EScreen'):
         return
     try:
+        global ListScrollPg, TextScrollPg
         layout = appuifw.app.layout
         size, pos = layout(appuifw.EMainPane)
         csize, cpos = layout(appuifw.EControlPane)
-        ListScrollPg = (size[1] - 16)/csize[1]
+        ListScrollPg = (size[1] - int(round(0.8*csize[1])))/csize[1]
         TextScrollPg = size[1]/16
+        #alert((size, pos, csize, cpos, ListScrollPg, TextScrollPg))
     except Exception, e:
         print e
     

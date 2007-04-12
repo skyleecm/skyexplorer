@@ -5,7 +5,7 @@
 &EN
 ;
 ;
-#{"SkyExplorer"},(0x2000A1C6),1,0,0
+#{"SkyExplorer"},(0x2000A1C6),1,0,1
 "license.txt"-"",FT,TA
 ;
 ;Supports Series 60 v 2.0
@@ -26,3 +26,5 @@
 "fnmatch.py"		-"!:\system\libs\fnmatch.py"
 "sets.py"		-"!:\system\libs\sets.py"
 "MMSMODULE.PYD"		-"!:\system\libs\MMSMODULE.PYD"
+
+@"applist.sis",(0x2000A807)

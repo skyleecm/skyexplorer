@@ -1,0 +1,13 @@
+Sky Explorer
+
+# 1.0.1 changes
+get the correct private dir for S60 3rd Edition in appDir (default.py)
+add Explorer.findApps1 (require applist.pyd - allow S60 3rd Edition)
+add AppItem._pname (same as old AppItem.name - the app filename without ext)
+  the AppItem.name is initialize with app caption (from findApps1)
+  [so there are now apps with the same title (name) shown on the Apps list]
+add start_exe changes for 3rd Edition
+fix checklayout
+
+Note: MMSMODULE.PYD is not included for 3rd edition sis.
+
