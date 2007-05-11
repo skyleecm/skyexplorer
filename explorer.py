@@ -44,6 +44,9 @@ from dir_util import copy_tree, remove_tree, copy_file, findFiles, zip_tree, unz
 #   the AppItem.name is initialize with app caption (from findApps1)
 # fix checklayout
 #----------------------------------------------------------------------
+# 1.0.2 changes
+# fix signal & battery bars disappear using ao_sleep in run.
+#----------------------------------------------------------------------
 
 TypeANY = 0
 TypeDRIVE = 2
@@ -1720,7 +1723,9 @@ def run(dir=None):
     try:
         if dir is None:
             dir = path.split(__file__)[0]
-        Explorer(dir).run()
+        #Explorer(dir).run()
+        exp = Explorer(dir)
+        e32.ao_sleep(0, exp.run)
     except Exception, e:
         alert(e)
         
