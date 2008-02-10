@@ -11,3 +11,18 @@ fix checklayout
 
 Note: MMSMODULE.PYD is not included for 3rd edition sis.
 
+# 1.0.2 changes
+fix signal & battery bars disappear using ao_sleep in run.
+
+# 1.0.3 changes
+(thanks Davide Alberani for reporting unicode filenames bugs [Issue 3])
+unicode path should be encoded in utf8 when using S60 os functions
+ modify path.join - return in utf8
+support unicode filename, search
+ dir_util.findFiles - support unicode names, return in unicode
+ searchText - support utf_16 files
+!? unicode filename is encoded in utf8 when added to zip file
+ unzip in S60 seems to work :)
+ (unzip in other OS may retain the utf8 encoded name)
+support UCS2 sms
+explorertag.py - key, value in Tags are saved in utf8

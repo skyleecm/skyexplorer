@@ -18,6 +18,7 @@ import socket
 import re
 import os
 from os import path
+import codecs
 import time
 from time import localtime, strftime
 import zipfile
@@ -25,7 +26,7 @@ from sets import Set
 from key_codes import EKeyLeftArrow, EKeyRightArrow, EKeyBackspace, EKeyPageUp, EKeyPageDown, EKeyYes, EKeyLeftSoftkey, EKeyRightSoftkey
 
 import keysimul
-from dir_util import copy_tree, remove_tree, copy_file, findFiles, zip_tree, unzipDir, mkpath, CopyStopError, filter
+from dir_util import copy_tree, remove_tree, copy_file, findFiles, zip_tree, unzipDir, mkpath, CopyStopError, filter, path_join, unicode_list
 
 #----------------------------------------------------------------------
 # python bugs
@@ -47,6 +48,21 @@ from dir_util import copy_tree, remove_tree, copy_file, findFiles, zip_tree, unz
 # 1.0.2 changes
 # fix signal & battery bars disappear using ao_sleep in run.
 #----------------------------------------------------------------------
+# 1.0.3 changes
+# unicode path should be encoded in utf8 when using S60 os functions
+#  modify path.join - return in utf8
+# support unicode filename, search
+#  dir_util.findFiles - support unicode names, return in unicode
+#  searchText - support utf_16 files
+# !? unicode filename is encoded in utf8 when added to zip file
+# unzip in S60 seems to work :)
+#  (unzip in other OS may retain the utf8 encoded name)
+# support UCS2 sms
+# explorertag.py - key, value in Tags are saved in utf8
+#----------------------------------------------------------------------
+
+if path.join is not path_join:
+    path.join = path_join
 
 TypeANY = 0
 TypeDRIVE = 2
@@ -156,7 +172,7 @@ class App(AppInterface):
         stags.sort()
         utags.extend(stags)
         for tag in utags:
-            a = AppTagItem(self, path.join(name, tag))
+            a = AppTagItem(self, os.sep.join([name, tag]))
             items.append(a.getAppitem(exp.isChecked(a)))
             apps.append(a)
         return items + self.getAppsitems(), apps + self.apps
@@ -173,7 +189,7 @@ class App(AppInterface):
         if tags[0] not in sset:
             subtags = self.getSubTags(tags, aset)
             subtags.sort()
-            tagitems = [AppTagItem(self, path.join(tagpath, tag)) for tag in subtags]
+            tagitems = [AppTagItem(self, os.sep.join([tagpath, tag])) for tag in subtags]
             apps = self._sortbyName(aset)
             tagitems.extend(apps)
         else:   # no subtag for drive tags
@@ -298,7 +314,9 @@ class App(AppInterface):
     def _readTags(self):
         try:
             from explorertag import Tags
-            self._userTags(Tags)
+            # in 1.0.3, key, value in Tags are saved in utf8
+            tags = dict([(unicode(k, 'utf8'), unicode(v, 'utf8')) for k, v in Tags.iteritems()])
+            self._userTags(tags)
         except Exception, e:
             if not isinstance(e, ImportError):
                 error(e)
@@ -307,7 +325,7 @@ class App(AppInterface):
     def _writeTags(self):
         name = self.name
         pathtags = self._get_pathtags()
-        m = dict([(path.join(name, aname), ','.join(tags)) for aname, tags in pathtags.iteritems() if tags])
+        m = dict([(os.sep.join([name, aname]), ','.join(tags)) for aname, tags in pathtags.iteritems() if tags])
         p = path.join(self.exp.appDir, 'explorertag.py')
         writeText(p, _str_tags(m))
 
@@ -371,7 +389,7 @@ class Explorer(object):
         self.listStyle = 0
         self.listViewExtra = 1  # view 1 more attribute in single-style listbox
         self.viewAttr = {"Type": viewType, "Size": viewSize, "Date": viewDate}
-        self.appIcon = path.join(appDir, IconFile)
+        self.appIcon = unicode(path.join(appDir, IconFile))
         self.keymod = keysimul.KeySimul()
         self._drives = None
         self._exts = {}
@@ -485,7 +503,7 @@ class Explorer(object):
             folders, files = listdir(appdir)
             for dir in folders:
                 p = path.join(appdir, dir)
-                files = filter([unicode(name) for name in os.listdir(p)], jext)
+                files = filter([unicode(name, 'utf8') for name in os.listdir(p)], jext)
                 if files and len(files) == 1:
                     apps.append((files[0], path.join(p, files[0])))
         apps.sort()
@@ -674,10 +692,10 @@ class Explorer(object):
         appuifw.app.set_exit()
 
     def showEditorPath(self):
-        appuifw.app.title = self.atxtFile or ATxtNew
+        appuifw.app.title = unicode(self.atxtFile, 'utf8') or ATxtNew
         
     def showPathname(self):
-        appuifw.app.title = self.currDir or AppTitle
+        appuifw.app.title = unicode(self.currDir, 'utf8') or AppTitle
 
     def refresh(self):
         self.display(self.getSelectedItemName())
@@ -792,6 +810,8 @@ class Explorer(object):
         if ext in self._editExts:
             self.editText(fname, self.atxtMenu[0:1])
             return
+        if type(fname) is not unicode:
+            fname = unicode(fname, 'utf8')
         try:
             if ext == AppExt[1:]:
                 e32.start_exe(AppRun, fname)
@@ -815,7 +835,7 @@ class Explorer(object):
         self.display()
 
     def selectAppPath(self, fs, dir, child=None):
-        o = fs.selectPath(dir)
+        o = fs.selectPath(unicode(dir, 'utf8'))
         if not o: return
         self.searchFs = o
         self.currDir = dir
@@ -1088,9 +1108,23 @@ class Explorer(object):
         to = appuifw.query(txt, u'text')
         if to:
             to = [t for t in [t.strip() for t in to.split(',')] if t]
-            for w in to:
-                messaging.sms_send(w, m)
-            alert(u"SMS is sent.")
+            # support UCS2 sms (eg for CJK)
+            enc = None
+            try:
+                str(m)
+            except Exception, e:
+                enc = 'UCS2'
+            if enc:
+                try: # require > 1.3.21
+                    for w in to:
+                        messaging.sms_send(w, m, enc)
+                    alert(u"SMS (u) is sent.")
+                except Exception, e:
+                    alert(u"Require newer PyS60. (>= 1.3.21)")
+            else: # default use 7bit
+                for w in to:
+                    messaging.sms_send(w, m)
+                alert(u"SMS is sent.")
         if self.pref['textmode']:
             self.keyc.start()
 
@@ -1144,6 +1178,7 @@ class Explorer(object):
         t = appuifw.multi_query(u"Send to", u"Subject")
         if not t: return
         to, txt = t
+        plist = unicode_list(plist)
         try:
             if e32.s60_version_info >= (3,0):
                 messaging.mms_send(to, txt, plist[0])
@@ -1164,6 +1199,7 @@ class Explorer(object):
         if not names: return
         plist = [p for p in pathList(self.currDir, names) if not path.isdir(p)]
         if not plist: return
+        #plist = unicode_list(plist)
         # Note: see bluetooth testing
         # ? can't find service (0, error)
         try:
@@ -1206,7 +1242,11 @@ class Explorer(object):
             for d in e32.drive_list():
                 fs.extend(findFiles(d + sep, pattern))
         if not (fs and text): return fs
-        rc = re.compile(text, re.I)
+        try:
+            rc = re.compile(text, re.I)
+        except re.error:
+            # Tries to search for the given plain string.
+            rc = re.compile(re.escape(text), re.I)
         return [item for item in fs if searchText(pathjoin('', item), rc)]
         
     def onSearch(self):
@@ -1225,7 +1265,7 @@ class Explorer(object):
         if isinstance(self.searchFs, AppInterface): #head in self._exts:
             self.searchFs = self.searchApp(s)
         else:
-            self.searchFs = [(unicode(name), dir) for name, dir in self.search(s, t)]
+            self.searchFs = self.search(s, t)
         # mod menus
         self.currSels = {}
         self.viewby = None
@@ -1311,6 +1351,8 @@ class Explorer(object):
             lbls = ["Name", "Location", "Size", "Modified"]
             sz = "%s (%d)" % (viewSize(s, False), s)
             dm = strftime(fmt, localtime(tm))
+            if type(dir) is not unicode:
+                dir = unicode(dir, 'utf8')
             vals = [name, dir, sz, dm[0:7] + dm[9:]]
         else:
             lbls = ["Name", "Free sp"] #"Free space", can't see all
@@ -1414,6 +1456,8 @@ class Explorer(object):
     def saveScreenshot(self, p):
         try:
             img = graphics.screenshot()
+            if type(p) is not unicode:
+                p = unicode(p, 'utf8')
             img.save(p)
         except Exception, e:
             alert(e)
@@ -1485,7 +1529,7 @@ def viewDate(val):
 
 
 def listdir(dir, viewby=None):
-    files = [unicode(name) for name in os.listdir(dir)]
+    files = [unicode(name, 'utf8') for name in os.listdir(dir)]
     return listfiles(files, viewby, path.join, dir, False)
 
 def listtuplefiles(files, viewby=None):
@@ -1616,10 +1660,12 @@ def zipList(fp, dir, names):
     dir = str(dir)
     if isinstance(names[0], tuple):
         for name, dir in names:
-            zipItem(zip, dir, str(name))
+            zipItem(zip, dir, name.encode('utf8')) #str(name))
     else:
-        for name in map(str, names):
-            zipItem(zip, dir, name)
+        for name in names:
+            zipItem(zip, dir, name.encode('utf8'))
+        #for name in map(str, names):
+        #    zipItem(zip, dir, name)
     zip.close()
 
 def zipItem(zip, dir, name):
@@ -1633,19 +1679,40 @@ def pathjoin(dir, item):
     if isinstance(item, tuple): dir, item = item[1], item[0]
     return path.join(dir, item)
 
+def searchTextInFile(f, rc):
+    for line in f:
+        if rc.search(line):
+            return line
+        
+# allow utf_16
 def searchText(p, rc):
     if path.isdir(p): return
-    s = None
+    # test with codecs utf_16 doesn't read
+    if fileisUtf16(p): # use readText to read all
+        try:
+            return searchTextInFile(readText(p).split('\n'), rc)
+        except Exception, e:
+            return
+    f = s = None
     try:
+        #f = codecs.open(p, 'rb', 'utf_16')
         f = file(p, 'r')
-        for line in f:
-            if rc.search(line):
-                s = line
-                break
+        s = searchTextInFile(f, rc)
         f.close()
     except Exception, e:
-        pass
+        if f: f.close()
     return s
+
+# check if file uses BOM -> Utf16
+def fileisUtf16(p):
+    b = False
+    f = None
+    try:
+        f = file(p, 'r')
+        b = f.read(2) == codecs.BOM
+    finally:
+        if f: f.close()
+    return b
 
 # allow utf_16 , writeText
 def readText(p):
@@ -1677,7 +1744,7 @@ def splithead(p):
     return p[0:i]
 
 def _str_data(rd, name):
-    rdc = ",\n    ".join(["\"%s\": '%s'" % (k.replace('\\', '\\\\'), str(v).replace('\\', '\\\\'))
+    rdc = ",\n    ".join(["\"%s\": '%s'" % (k.replace('\\', '\\\\').encode('utf8'), v.replace('\\', '\\\\').encode('utf8'))
                           for k, v in rd.iteritems()])
     return name + " = {\n    " + rdc + "}\n"
 def _str_pref(rd): return _str_data(rd, "Prefs")

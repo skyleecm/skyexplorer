@@ -2,6 +2,13 @@
 #    @copyright: 2007 -  Lee Chee Meng skyleecm@gmail.com
 #    @License: GPL
 
+#----------------------------------------------------------------------
+# 1.0.3 changes
+# unicode path should be encoded in utf8 when using os functions
+#  modify path.join
+# findFiles - support unicode names, return in unicode
+#----------------------------------------------------------------------
+
 from __future__ import generators
 import os
 from os import path, listdir, makedirs, chmod, error
@@ -14,18 +21,29 @@ from stat import S_IMODE, S_ISDIR
 import zipfile
 
 pSep = os.sep
-if hasattr(os, 'altsep'):
+if hasattr(os, 'altsep') and os.altsep:
     pSep += os.altsep
 if '/' not in pSep:
     pSep += '/'
 
 
+# this replaces os.path.join (encode p in utf8)
+os_path_join = path.join
+def path_join(a, *p):
+    return os_path_join((a and type(a) is unicode) and a.encode('utf8') or a, *[(type(d) is unicode) and d.encode('utf8') or d for d in p])
+if path.join is not path_join:
+    path.join = path_join
+
+def unicode_list(seq):
+    return [unicode(n, 'utf8') for n in seq]
+
 def findFiles(dir, pattern):
     """Return list of (filename, dir) that matches Unix filename pattern."""
     fs = []
     for d, dirs, files in os.walk(dir):
-        fs.extend([(n, d) for n in filter(dirs, pattern)])
-        fs.extend([(n, d) for n in filter(files, pattern)])
+        d = unicode(d, 'utf8')
+        fs.extend([(n, d) for n in filter(unicode_list(dirs), pattern)])
+        fs.extend([(n, d) for n in filter(unicode_list(files), pattern)])
     return fs
 
 class CopyStopError(Exception):
