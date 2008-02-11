@@ -76,7 +76,7 @@ SCREENSHOT = 5
 
 IconFile = u"explorer.mbm"
 AppTitle = u"File Explorer"
-AboutApp = u"Sky eXplorer v1.0.1 by\nskyleecm@gmail.com\nFor user guide, go to\nhttp://timelesssky.com\nat url\n/blog/sky-explorer"
+AboutApp = u"Sky eXplorer v1.0.3 by\nskyleecm@gmail.com\nFor user guide, go to\nhttp://timelesssky.com\nat url\n/blog/sky-explorer"
 DefaultName = u"My Phone"
 ATxtNew = u"[New]"
 
